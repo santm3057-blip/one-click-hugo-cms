@@ -64,6 +64,20 @@
       ['exam', '🎓', 'EXAMEN FINAL', 'Todos los modos, todas las hamburguesas', 'btn-dark'],
       ['progress', '📊', 'MI PROGRESO', 'Nivel, medallas, estadísticas y errores', 'btn-green'],
     ];
+    const top = BM.Store.topBurgers();
+    const topMastered = top.filter((b) => BM.SRS.isMastered(b.id)).length;
+    main.appendChild(h('button.top-cta', {
+      onclick: () => {
+        BM.Sound.play('tap');
+        if (!top.length) { UI.go('learn', { fam: 'top' }); return; }
+        UI.go('session', { title: 'Las más pedidas', modes: BM.MODE_IDS, pool: top, count: s.settings.length, diff: s.settings.difficulty, back: 'menu' });
+      },
+    },
+    h('span.top-cta-icon', '🔥'),
+    h('span.top-cta-text',
+      h('b', 'Practicar las más pedidas'),
+      h('small', top.length ? top.map(U.burgerName).join(' · ') : 'Aún no elegiste ninguna: márcalas en Aprender')),
+    top.length ? h('span.top-cta-count', topMastered + '/' + top.length) : null));
     main.appendChild(h('nav.menu', items.map(([to, ic, t, d, c]) => h('button.menu-btn.' + c, {
       onclick: () => { BM.Sound.play('tap'); UI.go(to); },
     }, h('span.menu-icon', ic), h('span.menu-text', h('b', t), h('small', d))))));
@@ -105,7 +119,7 @@
     main.appendChild(h('p.muted', 'Toca una hamburguesa para ver su ficha. Marcadas como aprendidas: ' + learnedN + '/42.'));
     const search = h('input.search', { type: 'search', placeholder: '🔎 Buscar hamburguesa o ingrediente…', oninput: (e) => { q = e.target.value.toLowerCase(); draw(); } });
     const chips = h('div.fam-chips');
-    [['all', 'Todas']].concat(D.families.map((f) => [f.id, f.name])).forEach(([id, name]) => {
+    [['all', 'Todas'], ['top', '🔥 Más pedidas']].concat(D.families.map((f) => [f.id, f.name])).forEach(([id, name]) => {
       chips.appendChild(h('button.fchip' + (fam === id ? '.on' : ''), {
         onclick: (e) => { fam = id; chips.querySelectorAll('.fchip').forEach((x) => x.classList.remove('on')); e.currentTarget.classList.add('on'); draw(); },
       }, name));
@@ -114,13 +128,13 @@
     main.appendChild(search); main.appendChild(chips); main.appendChild(grid);
     function draw() {
       grid.innerHTML = '';
-      const list = D.burgers.filter((b) => (fam === 'all' || b.family === fam) &&
+      const list = D.burgers.filter((b) => (fam === 'all' || b.family === fam || (fam === 'top' && BM.Store.isTop(b.id))) &&
         (!q || U.burgerName(b).toLowerCase().includes(q) || b.steps.some((st) => U.label(U.key(st)).toLowerCase().includes(q))));
       if (!list.length) grid.appendChild(h('p.muted', 'Sin resultados.'));
       list.forEach((b) => {
         grid.appendChild(h('button.burger-card', { onclick: () => UI.go('learnDetail', { id: b.id, fam }) },
           h('div.bc-stack', UI.stack(U.keys(b), { small: true })),
-          h('div.bc-name', b.name, b.variant ? h('small', b.variant) : null),
+          h('div.bc-name', BM.Store.isTop(b.id) ? h('span.top-badge', '🔥 Más pedida') : null, b.name, b.variant ? h('small', b.variant) : null),
           h('div.bc-foot', UI.masteryRing(BM.SRS.mastery(b.id), 34),
             s.learned[b.id] ? h('span.chip.chip-learned', '✓ Aprendida') : UI.statusChip(b.id))));
       });
@@ -178,6 +192,9 @@
         })),
       h('div.row-btns.detail-actions',
         learnBtn,
+        h('button.btn' + (BM.Store.isTop(b.id) ? '.btn-orange' : '.btn-ghost'), {
+          onclick: () => { BM.Store.toggleTop(b.id); BM.Sound.play('tap'); UI.go('learnDetail', p); },
+        }, BM.Store.isTop(b.id) ? '🔥 Está en Más pedidas' : '＋ Añadir a Más pedidas'),
         h('button.btn.btn-red', {
           onclick: () => UI.go('session', { title: 'Práctica: ' + U.burgerName(b), modes: ['build', 'missing', 'detective', 'memory'], fixed: [b, b, b, b], pool: [b], count: 4, diff: s.settings.difficulty, back: 'learn' }),
         }, '🎮 Practicar esta')),
@@ -190,7 +207,7 @@
   UI.register('training', (main) => {
     main.appendChild(UI.backBar('Entrenamiento personalizado'));
     const s = S();
-    let filter = 'notMastered'; let fam = D.families[0].id; let mode = 'mix';
+    let filter = 'top'; let fam = D.families[0].id; let mode = 'mix';
     const chosen = new Set();
     const info = h('p.train-info');
     const famSel = h('select.select', { onchange: (e) => { fam = e.target.value; update(); } },
@@ -200,6 +217,7 @@
       h('span', U.burgerName(b)), UI.statusChip(b.id))));
 
     function pool() {
+      if (filter === 'top') return BM.Store.topBurgers();
       if (filter === 'notMastered') return BM.SRS.notMastered();
       if (filter === 'hardest') return BM.SRS.hardest(10);
       if (filter === 'learned') return D.burgers.filter((b) => s.learned[b.id]);
@@ -208,6 +226,7 @@
       return D.burgers;
     }
     const opts = [
+      ['top', '🔥 Las más pedidas'],
       ['notMastered', '⏳ Solo las que no domino'],
       ['hardest', '⚠️ Mis 10 más difíciles'],
       ['learned', '✓ Las que marqué como aprendidas (verificarlas)'],
@@ -234,6 +253,7 @@
       info.textContent = p.length
         ? `${p.length} hamburguesa${p.length > 1 ? 's' : ''} en el entrenamiento: ` + p.slice(0, 8).map(U.burgerName).join(', ') + (p.length > 8 ? '…' : '')
         : filter === 'hardest' ? 'Aún no hay hamburguesas difíciles: juega algunas partidas primero.'
+          : filter === 'top' ? 'No tienes hamburguesas en "Más pedidas". Añádelas desde su ficha en Aprender.'
           : filter === 'learned' ? 'No has marcado hamburguesas como aprendidas en "Aprender".'
             : filter === 'pick' ? 'Elige al menos una hamburguesa.'
               : '¡Dominas todas! Elige otra opción.';

@@ -50,10 +50,11 @@
 
     weight(id) {
       const r = BM.Store.s.burgers[id];
-      if (!r || !r.seen) return 5; // nuevas: frecuencia media-alta
+      if (!r || !r.seen) return BM.Store.isTop(id) ? 9 : 5; // nuevas: frecuencia media-alta
       let w = BOX_WEIGHT[r.box];
       if (r.due <= Date.now()) w *= 2; // pendiente de repaso
       w *= 1.6 - r.mastery / 100;
+      if (BM.Store.isTop(id)) w *= 1.8; // las más pedidas salen más
       return Math.max(0.15, w);
     },
 

@@ -18,6 +18,7 @@
       burgers: {},      // id -> registro de repetición espaciada
       errors: {},       // id -> { claveError: veces }
       learned: {},      // id -> true (marcado a mano en "Aprender")
+      top: null,        // ids de las "más pedidas" (null = lista inicial)
       viewed: {},       // id -> true (ficha abierta)
       medals: {},       // id -> fecha
       exams: [],        // { date, type, total, correct, pct }
@@ -50,10 +51,24 @@
     },
     reset() {
       const sound = state ? state.settings.sound : true;
+      const top = state ? state.top : null;
       state = fresh();
       state.settings.sound = sound;
+      state.top = top; // la lista de más pedidas no es progreso: se conserva
       Store.save();
     },
+    // Hamburguesas "más pedidas": las elige el jugador; esta es la lista inicial
+    TOP_DEFAULT: ['cuarto_de_libra', 'onion_bbq', 'hamburguesa_con_queso', 'triple_hamburguesa_con_queso', 'mcbacon', 'mcpollo', 'mcnifica'],
+    topIds() { return state.top || Store.TOP_DEFAULT; },
+    isTop(id) { return Store.topIds().includes(id); },
+    toggleTop(id) {
+      const ids = Store.topIds().slice();
+      const i = ids.indexOf(id);
+      if (i >= 0) ids.splice(i, 1); else ids.push(id);
+      state.top = ids;
+      Store.save();
+    },
+    topBurgers() { return window.BM_DATA.burgers.filter((b) => Store.isTop(b.id)); },
     markDay() {
       const t = BM.U.today();
       if (!state.days.includes(t)) { state.days.push(t); Store.save(); }
